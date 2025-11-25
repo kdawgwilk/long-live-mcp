@@ -15,6 +15,7 @@ import {
 import { Suggestions, Suggestion } from "@/components/ai-elements/suggestion";
 import { Loader } from "@/components/ai-elements/loader";
 import { Shimmer } from "@/components/ai-elements/shimmer";
+import { CodeExecution } from "@/components/ai-elements/code-execution";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -26,9 +27,11 @@ import {
   ThumbsUpIcon,
   ThumbsDownIcon,
   SendIcon,
+  CodeIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useRef, useState } from "react";
+import type { ToolUIPart } from "ai";
 
 export default function ChatPage() {
   const { messages, sendMessage, status, error } = useChat();
@@ -37,9 +40,9 @@ export default function ChatPage() {
   const formRef = useRef<HTMLFormElement>(null);
 
   const suggestions = [
-    "Explain how React hooks work",
-    "Write a TypeScript function to debounce",
-    "What are the best practices for Next.js?",
+    "Calculate the Fibonacci sequence up to 20 terms",
+    "Generate 5 random UUIDs and hash them with SHA256",
+    "What's the current date and time in different formats?",
     "Help me understand async/await",
   ];
 
@@ -79,6 +82,13 @@ export default function ChatPage() {
       .join("");
   };
 
+  // Helper to get tool parts from a message
+  const getToolParts = (message: (typeof messages)[0]) => {
+    return message.parts
+      .filter((part) => part.type.startsWith("tool-"))
+      .map((part) => part as unknown as ToolUIPart);
+  };
+
   return (
     <div className="flex h-screen flex-col bg-linear-to-b from-background via-background to-muted/20">
       {/* Header */}
@@ -92,12 +102,12 @@ export default function ChatPage() {
             </Link>
             <div className="flex items-center gap-2">
               <div className="flex size-8 items-center justify-center rounded-lg bg-linear-to-br from-violet-500 to-indigo-600 shadow-lg shadow-violet-500/25">
-                <SparklesIcon className="size-4 text-white" />
+                <CodeIcon className="size-4 text-white" />
               </div>
               <div>
-                <h1 className="font-semibold text-sm">Gemini Chat</h1>
+                <h1 className="font-semibold text-sm">Code Mode Chat</h1>
                 <p className="text-muted-foreground text-xs">
-                  Powered by Gemini 2.5 Flash
+                  Powered by Claude + Daytona Sandbox
                 </p>
               </div>
             </div>
@@ -137,11 +147,12 @@ export default function ChatPage() {
                       className="text-2xl font-bold tracking-tight"
                       duration={3}
                     >
-                      How can I help you today?
+                      Code Mode: Execute Code in a Sandbox
                     </Shimmer>
                     <p className="max-w-md text-muted-foreground">
-                      I&apos;m powered by Google&apos;s Gemini 2.5 Flash. Ask me
-                      anything about coding, explain concepts, or just chat!
+                      I can write and execute TypeScript code in a secure
+                      Daytona sandbox. Ask me to calculate, process data, or
+                      perform complex operations!
                     </p>
                   </div>
 
@@ -161,49 +172,64 @@ export default function ChatPage() {
               </ConversationEmptyState>
             ) : (
               <div className="space-y-6">
-                {messages.map((message) => (
-                  <Message key={message.id} from={message.role}>
-                    <MessageContent>
-                      {message.role === "user" ? (
-                        <span className="whitespace-pre-wrap">
-                          {getMessageText(message)}
-                        </span>
-                      ) : (
-                        <MessageResponse>
-                          {getMessageText(message)}
-                        </MessageResponse>
-                      )}
-                    </MessageContent>
+                {messages.map((message) => {
+                  const textContent = getMessageText(message);
+                  const toolParts = getToolParts(message);
 
-                    {/* Message Actions for assistant */}
-                    {message.role === "assistant" && (
-                      <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => handleCopy(getMessageText(message))}
-                          className="text-muted-foreground hover:text-foreground"
-                        >
-                          <CopyIcon className="size-3" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          className="text-muted-foreground hover:text-foreground"
-                        >
-                          <ThumbsUpIcon className="size-3" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          className="text-muted-foreground hover:text-foreground"
-                        >
-                          <ThumbsDownIcon className="size-3" />
-                        </Button>
-                      </div>
-                    )}
-                  </Message>
-                ))}
+                  return (
+                    <Message key={message.id} from={message.role}>
+                      <MessageContent>
+                        {message.role === "user" ? (
+                          <span className="whitespace-pre-wrap">
+                            {textContent}
+                          </span>
+                        ) : (
+                          <>
+                            {/* Render tool calls (code execution) */}
+                            {toolParts.map((toolPart, index) => (
+                              <CodeExecution
+                                key={`${message.id}-tool-${index}`}
+                                part={toolPart}
+                              />
+                            ))}
+                            {/* Render text response */}
+                            {textContent && (
+                              <MessageResponse>{textContent}</MessageResponse>
+                            )}
+                          </>
+                        )}
+                      </MessageContent>
+
+                      {/* Message Actions for assistant */}
+                      {message.role === "assistant" && textContent && (
+                        <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => handleCopy(textContent)}
+                            className="text-muted-foreground hover:text-foreground"
+                          >
+                            <CopyIcon className="size-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            className="text-muted-foreground hover:text-foreground"
+                          >
+                            <ThumbsUpIcon className="size-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            className="text-muted-foreground hover:text-foreground"
+                          >
+                            <ThumbsDownIcon className="size-3" />
+                          </Button>
+                        </div>
+                      )}
+                    </Message>
+                  );
+                })}
 
                 {/* Loading indicator */}
                 {isLoading && (
@@ -261,7 +287,8 @@ export default function ChatPage() {
           </form>
 
           <p className="mt-3 text-center text-muted-foreground text-xs">
-            Gemini may produce inaccurate information. Verify important facts.
+            Code executes in a secure sandbox. Review generated code before
+            using in production.
           </p>
         </div>
       </footer>
